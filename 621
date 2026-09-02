@@ -1,0 +1,33 @@
+#include <string.h>
+
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+
+int leastInterval(char* tasks, int tasksSize, int n) {
+    int freq[26] = {0};
+    int maxFreq = 0;
+    
+    // Count frequencies of each character task
+    for (int i = 0; i < tasksSize; i++) {
+        freq[tasks[i] - 'A']++;
+        if (freq[tasks[i] - 'A'] > maxFreq) {
+            maxFreq = freq[tasks[i] - 'A'];
+        }
+    }
+    
+    // Count how many tasks share this maximum frequency count
+    int maxFreqCount = 0;
+    for (int i = 0; i < 26; i++) {
+        if (freq[i] == maxFreq) {
+            maxFreqCount++;
+        }
+    }
+    
+    // Calculate intervals via slot partitions
+    int partCount = maxFreq - 1;
+    int partLength = n - (maxFreqCount - 1);
+    int emptySlots = partCount * partLength;
+    int availableTasks = tasksSize - (maxFreq * maxFreqCount);
+    int idles = MAX(0, emptySlots - availableTasks);
+    
+    return tasksSize + idles;
+}
