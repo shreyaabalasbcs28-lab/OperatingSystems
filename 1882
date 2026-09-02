@@ -1,0 +1,98 @@
+#include <stdlib.h>
+typedef struct {
+    int weight;
+    int index;
+    long long freeTime; 
+} ServerNode;
+int compFree(ServerNode a, ServerNode b) {
+    if (a.weight != b.weight) return a.weight < b.weight ? -1 : 1;
+    return a.index < b.index ? -1 : 1;
+}
+int compBusy(ServerNode a, ServerNode b) {
+    if (a.freeTime != b.freeTime) return a.freeTime < b.freeTime ? -1 : 1;
+    if (a.weight != b.weight) return a.weight < b.weight ? -1 : 1;
+    return a.index < b.index ? -1 : 1;
+}
+void pushFree(ServerNode* heap, int* size, ServerNode val) {
+    int idx = (*size)++;
+    heap[idx] = val;
+    while (idx > 0) {
+        int p = (idx - 1) / 2;
+        if (compFree(heap[idx], heap[p]) < 0) {
+            ServerNode t = heap[idx]; heap[idx] = heap[p]; heap[p] = t;
+            idx = p;
+        } else break;
+    }
+}
+ServerNode popFree(ServerNode* heap, int* size) {
+    ServerNode top = heap[0];
+    heap[0] = heap[--(*size)];
+    int idx = 0;
+    while (2 * idx + 1 < *size) {
+        int left = 2 * idx + 1, right = 2 * idx + 2, target = left;
+        if (right < *size && compFree(heap[right], heap[left]) < 0) target = right;
+        if (compFree(heap[target], heap[idx]) < 0) {
+            ServerNode t = heap[idx]; heap[idx] = heap[target]; heap[target] = t;
+            idx = target;
+        } else break;
+    }
+    return top;
+}
+void pushBusy(ServerNode* heap, int* size, ServerNode val) {
+    int idx = (*size)++;
+    heap[idx] = val;
+    while (idx > 0) {
+        int p = (idx - 1) / 2;
+        if (compBusy(heap[idx], heap[p]) < 0) {
+            ServerNode t = heap[idx]; heap[idx] = heap[p]; heap[p] = t;
+            idx = p;
+        } else break;
+    }
+}
+ServerNode popBusy(ServerNode* heap, int* size) {
+    ServerNode top = heap[0];
+    heap[0] = heap[--(*size)];
+    int idx = 0;
+    while (2 * idx + 1 < *size) {
+        int left = 2 * idx + 1, right = 2 * idx + 2, target = left;
+        if (right < *size && compBusy(heap[right], heap[left]) < 0) target = right;
+        if (compBusy(heap[target], heap[idx]) < 0) {
+            ServerNode t = heap[idx]; heap[idx] = heap[target]; heap[target] = t;
+            idx = target;
+        } else break;
+    }
+    return top;
+}
+int* assignTasks(int* servers, int serversSize, int* tasks, int tasksSize, int* returnSize) {
+    ServerNode* freeHeap = (ServerNode*)malloc(sizeof(ServerNode) * serversSize);
+    ServerNode* busyHeap = (ServerNode*)malloc(sizeof(ServerNode) * serversSize);
+    int freeSize = 0, busySize = 0;
+    for (int i = 0; i < serversSize; i++) {
+        ServerNode s = {servers[i], i, 0};
+        pushFree(freeHeap, &freeSize, s);
+    }
+    int* ans = (int*)malloc(sizeof(int) * tasksSize);
+    *returnSize = tasksSize;
+    long long currTime = 0;
+    for (int i = 0; i < tasksSize; i++) {
+        if (currTime < i) currTime = i;
+        while (busySize > 0 && busyHeap[0].freeTime <= currTime) {
+            ServerNode s = popBusy(busyHeap, &busySize);
+            pushFree(freeHeap, &freeSize, s);
+        }
+        if (freeSize == 0) {
+            currTime = busyHeap[0].freeTime;
+            while (busySize > 0 && busyHeap[0].freeTime <= currTime) {
+                ServerNode s = popBusy(busyHeap, &busySize);
+                pushFree(freeHeap, &freeSize, s);
+            }
+        }
+        ServerNode s = popFree(freeHeap, &freeSize);
+        ans[i] = s.index;
+        s.freeTime = currTime + tasks[i];
+        pushBusy(busyHeap, &busySize, s);
+    }
+    free(freeHeap);
+    free(busyHeap);
+    return ans;
+}
