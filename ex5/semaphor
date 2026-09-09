@@ -1,0 +1,148 @@
+[24bcs026@mepcolinux ex5]$cat prod.c
+#include "header.h"
+
+int main() {
+    union semaphore snum;
+    int sid, in, num, *buf, s, i;
+    unsigned short a[3];
+
+    in = 0;
+    // IPC_CREAT alone handles access even if the block exists from a previous crash
+    s = shmget(2999, sizeof(int) * size, IPC_CREAT | 0666);
+    if (s == -1) {
+        perror("shmget");
+        exit(1);
+    } 
+    
+    buf = (int *)shmat(s, NULL, 0);
+    if (buf == (void *)-1) {
+        perror("shmat");
+        exit(1);
+    } 
+    
+    sid = semget(5999, 3, IPC_CREAT | 0666);
+    if (sid == -1) {
+        perror("semget");
+        exit(1);
+    } 
+    
+    a[0] = 1;    // mutex = 1
+    a[1] = 0;    // full = 0
+    a[2] = size; // empty = 5
+    snum.array = a;
+    semctl(sid, 0, SETALL, snum);
+
+    for (i = 0; i < size; i++) {
+        printf("Enter the data:\n");
+        scanf("%d", &num);
+
+        wait_sem(sid, empty);
+        wait_sem(sid, mutex);
+
+        buf[in % size] = num;
+        in++;
+
+        signal_sem(sid, mutex);
+        signal_sem(sid, full);
+    }
+    
+    shmdt(buf);
+    return 0;
+}
+
+[24bcs026@mepcolinux ex5]$cat cons.c
+#include "header.h"
+
+int main() {
+    int sid, out, num, *buf, s, i;
+    out = 0;
+
+    s = shmget(2999, sizeof(int) * size, 0666);
+    if (s == -1) {
+        perror("shmget");
+        exit(1);
+    } 
+    
+    buf = (int *)shmat(s, NULL, 0);
+    if (buf == (void *)-1) {
+        perror("shmat");
+        exit(1);
+    } 
+    
+    sid = semget(5999, 3, 0666);
+    if (sid == -1) { 
+        perror("semget");
+        exit(1);
+    } 
+
+    printf("Data Read:\n");
+    for (i = 0; i < size; i++) { 
+        wait_sem(sid, full);
+        wait_sem(sid, mutex);
+
+        num = buf[out % size];
+        out++;
+
+        signal_sem(sid, mutex);
+        signal_sem(sid, empty);
+
+        printf("Data[%d]: %d\n", out, num);
+    }
+
+    shmdt(buf);
+    semctl(sid, 0, IPC_RMID);
+    shmctl(s, IPC_RMID, NULL);
+    
+    return 0;
+}
+
+[24bcs026@mepcolinux ex5]$cat imp.c
+#include "header.h"
+
+void wait_sem(int sid, int sno) {
+    struct sembuf s;
+    s.sem_num = sno;
+    s.sem_op = -1;          
+    s.sem_flg = 0;   // Changed SEM_UNDO to 0 for resource persistence across forks/execs
+    semop(sid, &s, 1);
+}
+
+void signal_sem(int sid, int sno) {
+    struct sembuf s;
+    s.sem_num = sno;
+    s.sem_op = 1;           
+    s.sem_flg = 0;   // Changed SEM_UNDO to 0 
+    semop(sid, &s, 1);
+}
+
+[24bcs026@mepcolinux ex5]$cat hearder.h
+cat: hearder.h: No such file or directory
+[24bcs026@mepcolinux ex5]$cat header.h
+#ifndef HEADER_H
+#define HEADER_H
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/sem.h>
+#include <sys/shm.h>
+#include <unistd.h>
+
+#define size 5       
+#define mutex 0
+#define full 1
+#define empty 2
+
+union semaphore {
+    int val;
+    struct semid_ds *buf;
+    struct seminfo *_buf;
+    unsigned short *array;
+};
+
+void wait_sem(int sid, int sno);
+void signal_sem(int sid, int sno);
+
+#endif
+
