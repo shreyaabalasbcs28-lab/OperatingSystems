@@ -1,0 +1,38 @@
+#include <mutex>
+#include <condition_variable>
+
+class H2O {
+private:
+    std::mutex mtx;
+    std::condition_variable cv;
+    int h_count; // Tracks hydrogen atoms in the current batch
+
+public:
+    H2O() {
+        h_count = 0;
+    }
+
+    void hydrogen(function<void()> releaseHydrogen) {
+        std::unique_lock<std::mutex> lock(mtx);
+        // Block if 2 Hydrogens are already waiting for an Oxygen
+        cv.wait(lock, [this]() { return h_count < 2; });
+        
+        // releaseHydrogen() outputs "H". Do not change or remove this line.
+        releaseHydrogen();
+        
+        h_count++;
+        cv.notify_all();
+    }
+
+    void oxygen(function<void()> releaseOxygen) {
+        std::unique_lock<std::mutex> lock(mtx);
+        // Block until exactly 2 Hydrogen atoms are ready to form water
+        cv.wait(lock, [this]() { return h_count == 2; });
+        
+        // releaseOxygen() outputs "O". Do not change or remove this line.
+        releaseOxygen();
+        
+        h_count = 0; // Reset for the next H2O molecule batch
+        cv.notify_all();
+    }
+};
