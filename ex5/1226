@@ -1,0 +1,52 @@
+#include <mutex>
+#include <condition_variable>
+#include <vector>
+
+class DiningPhilosophers {
+private:
+    std::vector<std::mutex> forks;
+    std::mutex limiting_mtx;
+    std::condition_variable cv;
+    int active_philosophers; // Limit concurrent pick-ups to 4 to prevent deadlock
+
+public:
+    DiningPhilosophers() : forks(5), active_philosophers(0) {}
+
+    void wantsToEat(int philosopher,
+                    function<void()> pickLeftFork,
+                    function<void()> pickRightFork,
+                    function<void()> eat,
+                    function<void()> putLeftFork,
+                    function<void()> putRightFork) {
+        
+        int left = philosopher;
+        int right = (philosopher + 1) % 5;
+        
+        // Prevent all 5 philosophers from picking up forks at once
+        {
+            std::unique_lock<std::mutex> lock(limiting_mtx);
+            cv.wait(lock, [this]() { return active_philosophers < 4; });
+            active_philosophers++;
+        }
+
+        // Lock individual forks cleanly without structural overlap
+        std::unique_lock<std::mutex> lockLeft(forks[left]);
+        std::unique_lock<std::mutex> lockRight(forks[right]);
+
+        pickLeftFork();
+        pickRightFork();
+        eat();
+        putLeftFork();
+        putRightFork();
+
+        // Release locks and allow another philosopher to enter the queue
+        lockRight.unlock();
+        lockLeft.unlock();
+
+        {
+            std::unique_lock<std::mutex> lock(limiting_mtx);
+            active_philosophers--;
+            cv.notify_one();
+        }
+    }
+};
