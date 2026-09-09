@@ -1,0 +1,43 @@
+#include <mutex>
+#include <condition_variable>
+
+class Foo {
+private:
+    std::mutex mtx;
+    std::condition_variable cv;
+    int state; // 0: initial, 1: first done, 2: second done
+
+public:
+    Foo() {
+        state = 0;
+    }
+
+    void first(function<void()> printFirst) {
+        std::unique_lock<std::mutex> lock(mtx);
+        
+        // printFirst() outputs "first". Do not change or remove this line.
+        printFirst();
+        
+        state = 1;
+        cv.notify_all(); // Wake up threads waiting for state 1
+    }
+
+    void second(function<void()> printSecond) {
+        std::unique_lock<std::mutex> lock(mtx);
+        cv.wait(lock, [this]() { return state >= 1; });
+        
+        // printSecond() outputs "second". Do not change or remove this line.
+        printSecond();
+        
+        state = 2;
+        cv.notify_all(); // Wake up threads waiting for state 2
+    }
+
+    void third(function<void()> printThird) {
+        std::unique_lock<std::mutex> lock(mtx);
+        cv.wait(lock, [this]() { return state >= 2; });
+        
+        // printThird() outputs "third". Do not change or remove this line.
+        printThird();
+    }
+};
